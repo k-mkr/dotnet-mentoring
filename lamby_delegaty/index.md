@@ -266,5 +266,121 @@ Wyobraźmy sobie, że jesteśmy właścicielami oprogramowania, które służy d
 Każdy z klientów chciałby na swój sposób monitorować postęp przetwarzania. W tym celu można wykorzystać mechanizm multiemisji:
 
 ```csharp
+public delegate void ProgressMonitor(int processed, int totalCount);
 
+public class DataProcessor
+{
+    public ProgressMonitor Monitor;
+
+    public void Process(List<SpaceData> data)
+    {
+        for(int i = 0; i < data.Count; ++i)
+        {
+            data[i].Process();
+            Monitor(i, data.Count);
+        }
+    }
+}
 ```
+
+Powyższa prosta implementacja przedstawia proces przetwarzania listy danych `SpaceData`. Implementacja tej klasy została pominięta, gdyż nie jest przedmiotem przykładu. Klasa `DataProcessor` udostępnia publiczną właściwość o typie delegaty, do której może się odwołać każdy klient i dzięki temu monitorować postęp przetwarzania. Przykładowe użycie mogłoby wyglądać następjąco:
+
+```csharp
+var processor = new DataProcessor();
+
+processor.Monitor += NasaMonitor;
+processor.Monitor += SpaceXNotifier;
+
+processor.Process(data);
+
+void NasaMonitor(int processed, int totalCount)
+{
+    Console.WriteLine($"Sent to NASA Server. {processed}/{totalCount}");
+}
+
+void SpaceXNotifier(int processed, int totalCount)
+{
+    if (processed == totalCount)
+        Console.WriteLine("Data was processed.");
+}
+```
+
+Przy za każdym razem kiedy wywołamy delegat `Monitor` wszystkie metody, które zostały do niego dodane zostaną wywołane **w kolejności dodawania**. Jak widać implementacja wewnętrzna tych metod może być dowolna i tak w tym przypadku NASA jest zainteresowana ciągłym monitoringiem, a dla odmiany SpaceX chce jedynie dostać informacje kiedy przetwarzanie zostanie zakończone.
+
+Jeśli chcemy możemy również usuwać delegaty w trakcie działania programu przy pomocy operatora -=. Operacja ta jest idempotentna czyli jeśli dany delegat nie istnieje w naszej liście delegatów nic się nie stanie.
+
+**Uwaga:** Delegaty są niezmienne, mimo że są typami referencyjnymi to operacje += i -= w rzeczywistości tworzą nowy egzemplarz delegata (nowe miejsce w pamięci) i przypisują go do istniejącej zmiennej.
+
+Może się teraz zastanowić wszystko fajnie, ale co jeśli delegat ma inny typ zwrotny niż `void`? W tym przypadku standardowo zostaną wykonane wszystkie funkcje w kolejności dodania przy czym wynik zostanie zwrócony tylko dla ostatniej wykonanej metody. Reszta wartości zostanie zwyczajnie zignorowana.
+
+Podsumowując multiemisja delegatów może być używana przy rozwiązywaniu następujących problemów:
+
+- Obsługa zdarzeń, będziemy ten temat poruszać w dalszej cześci tego rozdziału, przy czym dzięki multiemisyjności możemy wywoływać różnych i niezależnych od siebie metod po wystąpieniu określonego zdarzenia.
+- Multiemisyjność delegatów może być użyta do implementacji wzorca projektowego _Polecenie_ (ang. Command), o którym będziemy mówić w dalszej części nauki
+- Zastosowanie multiemisyjności można również znaleźć przy implementacji metod typu Plug-In gdzie w trakcie działania programu możemy dodawać kolejne akcje które zostaną wykonane jedna po drugiej w odpowiedniej chwili
+- Kolejną gałęzią jest programowanie asynchroniczne, gdzie możemy wywołać kilka metod asynchronicznych (działających w tle) i czekać na ich zakończenie.
+
+## 3. Standardowe delegaty Func i Action
+
+Typy delegacyjne nie mają ograniczeń i aplikują się do nich wszystkie dotychczas poznane przez Ciebie zagadnienia programowania obiektowego. Dla przykładu nic nie stoi na przeszkodzie abyś typ delegacyjny posiadał generyczne parametry typów. Dla przykładu:
+
+```csharp
+public delegate TDestination Transform<TSource, TDestination>(TSource source, TDestination destination);
+```
+
+Zauważ, że pisanie delegatów może być czasem karkołomne i wymagać dużej ilości nowych typów. Dodatkowo każda z klas posiadałaby swój zestaw delegat, a ich sygnatury nakładałyby się na siebie w projekcie co zmniejszałoby czytelność i utrzymanie kodu.
+
+Aby pozbyć się tego problemu i zunifikować użycie typów delegujących wprowadzono dwa standardowe delegaty generyczne, które pozwalają na pisanie delegat działających z metodamy o każdym typie zwrotnym i dowolnej liczbie argumentów (ograniczenie ustawiono do 16 parametrów).
+Tymi typami są delegaty Func i Action, które są zdefiniowane w stanardowej przestrzeni nazw i są domyślnie dostępne dla programisty.
+
+### 3.1. Delegat Action
+
+Możesz się zastanowić dlaczego wprowadzono dwa różne delegaty w celu pokrycia wszystkich możliwych wariancji sygnatur metod. Główną przyczyną jest typ zwrotny `void`, dla którego nie ma odpowiednia generycznego. Delegat `Action` pokrywa wszystkie sygnatury, które mają typ zwrotny void. Poniżej przedstawiam definicję typu `Action`:
+
+```csharp
+delegate void Action<in T>(T arg);
+delegate void Action<in T1, in T2>(T1 arg1, T2 arg2);
+... // aż do T16
+```
+
+Tych wszystkich delegatów nie trzeba definiować ręcznie, ponieważ są już wbudowane w język i dostępne w przestrzeni nazw `System`. I tak użycie takiego delegatu mogłoby wyglądać następująco:
+
+```csharp
+PrintRandom(PrintConsole); // Console: <number>
+
+PrintRandom(PrintFile); // <number> in temp file
+
+void PrintRandom(Action<int> printAction)
+{
+    Random rnd = new Random();
+    printAction(rnd.Next());
+}
+
+void PrintConsole(int number)
+{
+    Console.WriteLine($"Console: {number}");
+}
+
+void PrintFile(int number)
+{
+    string tempFile = Path.GetTempFileName();
+    File.WriteAllText(tempFile, number.ToString());
+}
+```
+
+Dzięki zastosowaniu delegata `Action` kod jest czytelniejszy i osoba, która korzysta z metody, która wymaga parametru `Action` jak argument od razu wie z czym ma do czynienia i jak z tym typem pracować.
+
+### 3.2. Delegat Func
+
+Delegat `Func` jest bardzo podobny do wyżej omawianego `Action` z tą różnicą, że delegat `Func` pokrywa sygnatury z typem zwracanym. Poniżej przedstawiam definicje tych delegatów, które również są już wbudowane w język.
+
+```csharp
+delegate TResult Func<out TResult>();
+delegate TResult Func<in T, out TResult>(T arg);
+delegate TResult Func<in T1, in T2, out TResult>(T1 arg1, T2 arg2);
+...
+```
+
+Przykład użycia delegatu `Func` jest taki sam jak typu `Action`, ważne jest, aby sygnatura się zgadzała. Dla przećwiczenia pokażę Ci zastosowanie delegatu `Func` w funkcjach LINQ, których będziemy się uczyć w dalszych rozdziałach.
+
+Używając LINQ możemy przefiltrować listę, aby zwracała tylko wartości spełniające dany warunek. I tak sygnatura takiej wbudowanej w język metody to:
