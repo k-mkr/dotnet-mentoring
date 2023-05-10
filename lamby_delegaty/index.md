@@ -320,6 +320,53 @@ Podsumowując multiemisja delegatów może być używana przy rozwiązywaniu nas
 - Zastosowanie multiemisyjności można również znaleźć przy implementacji metod typu Plug-In gdzie w trakcie działania programu możemy dodawać kolejne akcje które zostaną wykonane jedna po drugiej w odpowiedniej chwili
 - Kolejną gałęzią jest programowanie asynchroniczne, gdzie możemy wywołać kilka metod asynchronicznych (działających w tle) i czekać na ich zakończenie.
 
+### 2.3. Zgodność typów delegatów
+
+Ważną rzeczą, którą należy zapamiętać o delegatach jest to, że są niezgodne nawet jeśli mają te same sygnatury. Najłatwiej wyobrazić sobie to jako analogię klas. Dwie różne klasy, które mają dokładnie te same właściwości również są ze sobą niezgodne i nie możemy przypisać jednej do drugiej.
+
+Przykład:
+
+```csharp
+delegate void Method1();
+delegate void Method2();
+
+Method1 m1 = SampleMethod;
+Method2 m2 = m1 // Błąd kompilacji
+```
+
+Jeśli natomiast chodzi o porównywanie delegatów ze sobą to są one równe jeśli mają przypisane te same metody docelowe. W przypadku delegat multiemisji liczy się również **kolejność**.
+
+Pamiętaj też, że w przypadku delegatów również mają zastosowanie standardowe zasady polimorifzmu, czyli np. delegat może mieć bardziej specyficzne typy parametrów niż jego metoda docelowa i nazywa się to **kontrwariancją**. Ważne, żebyś zapamiętał, że delegat tak naprawdę wywołuje metodę w czyimś imieniu, więc tak jakbyś w poniższym przykładzie wywołał metodę `PrintConsole` z argumentem typu `string`.
+
+```csharp
+delegate void Print(string text);
+
+void PrintConsole(object text)
+{
+    Console.WriteLine(text);
+}
+
+Print p = PrintConsole;
+```
+
+Najważniejsze żebyś zapamiętał, że dla delegatów o typach generycznych ma zastosowanie normalny polimorfizm i kowariancja i kontrwariancja typów, o której mówiliśmy sobie w rozdziale dotyczącym typów generycznych. Przy definiowaniu generycznego typu delegacyjnego do dobrych praktyk należy:
+
+- oznaczenie parametru typu używanego tylko w odniesieniu do wartości zwrotnej jako kowawriantnego (out);
+- oznaczenie wszystkich typów parametrów używanych tylko w odniesieniu do parametrów jako kontrwariantnych (in).
+
+Dzięki temu umożliwiamy naturalne działanie konwersji poprzez respektowanie relacji dziedziczenia między typami. Dzięki temu możliwe jest wykonanie następujących operacji:
+
+```csharp
+interface IFruit { }
+interface IApple : IFruit { }
+
+delegate T FruitFactory<out T>() where T : IFruit;
+
+// Użycie:
+FruitFactory<IApple> appleFactory = GetAppleFactory;
+FruitFactory<IFruit> fruitFactory = appleFactory;
+```
+
 ## 3. Standardowe delegaty Func i Action
 
 Typy delegacyjne nie mają ograniczeń i aplikują się do nich wszystkie dotychczas poznane przez Ciebie zagadnienia programowania obiektowego. Dla przykładu nic nie stoi na przeszkodzie abyś typ delegacyjny posiadał generyczne parametry typów. Dla przykładu:
@@ -383,4 +430,113 @@ delegate TResult Func<in T1, in T2, out TResult>(T1 arg1, T2 arg2);
 
 Przykład użycia delegatu `Func` jest taki sam jak typu `Action`, ważne jest, aby sygnatura się zgadzała. Dla przećwiczenia pokażę Ci zastosowanie delegatu `Func` w funkcjach LINQ, których będziemy się uczyć w dalszych rozdziałach.
 
-Używając LINQ możemy przefiltrować listę, aby zwracała tylko wartości spełniające dany warunek. I tak sygnatura takiej wbudowanej w język metody to:
+Używając LINQ możemy przefiltrować listę liczb, aby zwracała tylko wartości spełniające dany warunek. I tak sygnatura jednej z najpopularniejszych metod to w LINQ - `Where(...)` to:
+
+![Where Definition](./imgs/where_definition.png)
+
+Jak widzisz powyższa funkcja przyjmuje jako parametr delegat `Func`, który zgodnie z powyższą definicją jako typ wejściowy przyjmuje `int` i zwraca `bool`. Delegat ten w metodzie `Where` służy do sprawdzenia czy aktualnie analizowana liczba powinna znaleźć się w kolekcji wyjściowej czy też nie.
+
+Przeanalizujmy sobie przypadek, w którym chcielibyśmy spośród listy liczb wybierzemy tylko liczby parzyste:
+
+```csharp
+List<int> numbers = new List<int> { 1, 2, 3, 4, 5, 6, 7 };
+
+var evenNumbers = numbers.Where(IsEven);
+
+bool IsEven(int num)
+{
+    return num % 2 == 0;
+}
+```
+
+### 3.3. Podsumowanie delegat Action i Func
+
+W trakcie dalszej przygody z językiem C# zobaczysz jak częste i powszechne są delegaty `Action` i `Func` można powiedzieć, że wraz z lambdami, które będziemy za chwilę omawiać są obecne wszędzie od kolekcji po testy. Jak mogłeś już zauważyć są niezwykle użyteczne poprzez swoją elastyczność i możliwość przesunięcia odpowiedzialności za dostarczenie implementacji na klienta naszej metody.
+
+## 4. Kiedy delegate, a kiedy interfejsy
+
+Jak może już zauważyłeś delegaty są na swój sposób podobne do interfejsów, ponieważ spełniają tą samą rolę - definiują zachowanie i przesuwają obowiązek implementacji na klienta.
+
+W związku z tym możemy powiedzieć, że każdy problem, dający się rozwiązać za pomocą delegatu można też rozwiązać przy wykorzystaniu interfejsu. W celu zaprezentowania tej wymienności rozpatrzmy przykład zapisywania zawartości pliku w dowolne miejsce. Przy użyciu delegatów kod wyglądałby następująco:
+
+```csharp
+public void SaveFile(string filePath, Action<string> saveAction)
+{
+    string text = File.ReadAllText(filePath);
+    saveAction(text);
+}
+
+public void SaveTextConsole(string text)
+{
+    Console.WriteLine(text);
+}
+
+public void SaveTextDatabase(string text)
+{
+    // Save text to database
+}
+
+// Użycie:
+SaveFile(@"C:\file1.txt", SaveTextConsole);
+SaveFile(@"C:\file1.txt", SaveTextDatabase);
+```
+
+Spróbujmy teraz napisać to samo przy użyciu interfejsu:
+
+```csharp
+public interface ITextWriter
+{
+    void Write(string text);
+}
+
+public void SaveFile(string filePath, ITextWriter textWriter)
+{
+    string text = File.ReadAllText(filePath);
+    textWriter.Write(text);
+}
+
+public class ConsoleWriter : ITextWriter
+{
+    public void Write(string text)
+    {
+        Console.WriteLine(text);
+    }
+}
+
+public class DatabaseWriter : ITextWriter
+{
+    public void Write(string text)
+    {
+        // Save text to database
+    }
+}
+
+// Użycie:
+SaveFile(@"C:\file1.txt", new ConsoleWriter());
+SaveFile(@"C:\file1.txt", new DatabaseWriter());
+```
+
+Obie wykonane przeze mnie implementacje dadzą dokładnie ten sam wynik. Na podstawie wszystkich przeanalizowanych przykładów można wyciągnąć wniosek, że delegat może być lepszym rozwiązaniem niż interfejs jeśli spełniony jest przynajmniej jeden z poniższych warunków:
+
+- interfejs zawiera definicję tylko jednej metody
+- potrzebna jest możliwość skorzystania z multiemisji
+- sybskrybent musi zaimplementować interfejs wiele razy
+
+Widzisz, że w naszym przypadku z zapisem tekstu lepiej sprawdziłyby się delegaty, ale już w przypadku potrzeby rozszerzenia funkcjonalność o kolejne wymagania związane ze źródłem zapisu tekstu lepiej sprawdziłyby się interfejsy ze względu na elastyczność w definiowaniu kolejnych zachowań, które byłyby zamknięte w obrębie jednego interfejsu.
+
+## 5. Wyrażenia lambda
+
+Mając już wiedzę o delegatach możemy przejść płynnie do wyrażeń lambda, które są ich specyficznym przykładem, a tak dokładnie to są metodą bez nazwy, która jest potem wpisywana w miejsce egzemplarza delegatu. Użycie wyrażenia lambda możemy przedstawić na przykładzie naszej klasy kalkulator z początku rozdziału. Implementacja klasy pozostałaby taka sama przy czym użycie byłoby następujące:
+
+```csharp
+public static void Main()
+{
+    Calculator calculator = new Calculator();
+
+    Operation add = (x, y) => x + y; // wyrażenie lambda
+
+    double result = calculator.Calculate(add, 10, 20);
+}
+```
+
+TBD...
