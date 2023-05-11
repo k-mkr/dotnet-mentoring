@@ -449,7 +449,17 @@ bool IsEven(int num)
 }
 ```
 
-### 3.3. Podsumowanie delegat Action i Func
+### 3.4. Delegat Predicate
+
+Delegat `Predicate` jest specyficznym przypadkiem delegatu `Func`, który reprezentuje metodę definiującą zestaw kryteriów i, która określa czy określony obiekt spełnia te kryteria. Jest to kolejny z delegatów wbudowany w standard języka:
+
+```csharp
+delegate bool Predicate<in T>(T arg);
+```
+
+To czy będziesz korzystać z delegatu `Predicate<T>`, czy z `Func<T, bool>` jest Twoją decyzją, zachowują się one dokładnie tak samo. Ważne tylko żebyś był konsekwentny w wyborze. Przedstawiłem Ci delegate `Predicate`, abyś się nie zdziwił gdybyś się kiedyś z nim spotkał w kodzie, którejś z bibliotek.
+
+### 3.5. Podsumowanie delegat Action i Func
 
 W trakcie dalszej przygody z językiem C# zobaczysz jak częste i powszechne są delegaty `Action` i `Func` można powiedzieć, że wraz z lambdami, które będziemy za chwilę omawiać są obecne wszędzie od kolekcji po testy. Jak mogłeś już zauważyć są niezwykle użyteczne poprzez swoją elastyczność i możliwość przesunięcia odpowiedzialności za dostarczenie implementacji na klienta naszej metody.
 
@@ -539,4 +549,132 @@ public static void Main()
 }
 ```
 
-TBD...
+Definicja wyrażeń lambda: `(parametry) => wyrażenie lub blok instrukcji`
+
+Przykłady:
+
+```csharp
+(int x, string y) => Console.WriteLine($"Text: {y}, Number: {x});
+```
+
+```csharp
+string x => {
+    if(string.IsNullOrEmpty(x))
+        return 0;
+
+    return int.Parse(x);
+}
+```
+
+Ciałem wyrażenia lambda może być pojedyncza instrukcja lub blok instrukcji. Dla wygody nawias przy parametrach można opuścić, ale tylko jeśli jest dokładnie jeden parametr typu, który można wydedukować. Powyższe przykłady zostaną przez kompilatora zamienione na delegaty:
+
+```csharp
+delegate void random_name_xxx(int x, string y);
+delegate int random_name_yyy(string x);
+```
+
+Widzisz więc, że każdy parametr wyrażenia lambda odpowiada parametrowi delegatu, a typ wyrażenia (który również może być `void`) odpowiada typowi zwrotnemu delegatu.
+
+Wyrażenia lambda najszersze zastosowanie mają dla delegatów `Func` i `Action` co zaobserwujesz podczas dalszej nauki przy zapytaniach LINQ. Przykład z parzystymi liczbami mógłby zostać zapisany następująco przy użyciu wyrażeń lambda:
+
+```csharp
+List<int> numbers = new List<int> { 1, 2, 3, 4, 5, 6, 7 };
+
+var evenNumbers = numbers.Where(x => x % 2 == 0);
+```
+
+Bardzo często pisząc wyrażenia lambda nie musimy podawać typów przy parametrach, ponieważ kompilator jest w stanie je wydedukować samodzielnie. W przypadku gdy dedukcja się nie powiedzie programista musi jawnie podać typy parametrów. Dobrym przykładem są typy generyczne:
+
+```csharp
+delegate void SampleMethod<T>(Action<T>);
+
+// Użycie:
+SampleMethod(x => Console.WriteLine(x)); // poniższy kod nie zadziała. Jakiego typu jest x?
+SampleMethod((int x) => Console.WriteLine(x)); // x jest typu int
+```
+
+Przydatną rzeczą w wyrażeniach lambda jest to, że zmienne, na których operujemy w wyrażeniu nie muszą być ograniczone tylko do zdefiniowanych typów. Wyrażenie lambda może korzystać również ze zmiennych lokalnych, czy z parametrów metody, w której jest zdefiniowane (zmiennych zewnętrznych).
+
+Najważniejsze żebyś zapamiętał - wyrażenie lambda posiada dostęp do wszystkich zmiennych, które znajdują się w jego zakresie w momencie pisania. Dla lepszego zoabrazowania przeanalizujmy poniższy przykład:
+
+```csharp
+public class Multiplier
+{
+    private int _multiplyFactor;
+
+    public Func<int> OperationMultiplierFunc(Func<int> operation)
+    {
+        return () => operation() * _multiplyFactor; // wyrażenie lambda korzysta z pola
+    }
+}
+
+// Użycie:
+void Main()
+{
+    int x = 10;
+
+    Func<int> multiplyFunc = OperationMultiplierFunc(() => x + GetRandom());
+}
+
+int GetRandom()
+{
+    Random rnd = new Random();
+    return rnd.Next();
+}
+```
+
+Jak widzisz na powyższym listingu nasze wyrażenie lambda w metodzie `OperationMultiplierFunc` przyjęło w wyrażeniu pole klasy, natomiast przy wywołaniu w metodzie `Main` do wyrażenia przekazaliśmy zmienną lokalną `x` jak również metodę `GetRandom`.
+
+Zmienne zewnętrzne używane przez wyrażenie lambda nazywa się **zmiennymi przechwyconymi**, a wyrażenie lambda przechwytujące zmienne nazywa się **domknięciem**.
+
+**Ważne:** Bardzo ważne, żebyś pamiętał, że wartości przechwyconych zmiennych są obliczane w chwili wywoływania delegatu, a nie w czasie przechwytywania:
+
+```csharp
+int factor = 2;
+Func<int, int> multiplier = n => n * factor;
+int factor = 10;
+
+int result = multiplier(3) // Wynikiem jest 30
+```
+
+Wyrażenia lambda są zachowują się dokładnie tak samo jak zwykły kod i podlegają tym samym zasadom, dlatego też nie ma żadnych przeciwwskazań żeby zmienne przechwycone przekazywane z zewnątrz były modyfikowane wewnątrz wyrażenia.
+
+```csharp
+int start = 10;
+Func<int> countdownFunc = () => --start;
+countdownFunc(); //9
+countdownFunc(); //8
+...
+```
+
+**Ważne:** W przypadku zmiennych przechwyconych ich zakres istnienia zostaje rozszerzony do istnienia delegatu. Jako przykład możemy wziąć klasę `Multiplier` z poprzedniego przykładu. Nawet jeśli cykl życia obiektu się skończy to jeśli delegat będzie dalej istnieć to dalej będzie się on odnosić do wartości pola `_multiplyFactor`.
+
+**Ważne:** Zmienna lokalna, której egzemplarz został utworzony w wyrażeniu lambda jest unikalna dla każdego wywołania delegatu. W związku z tym, każe wywołanie będzie posiadało inną instancję zmiennej. W poniższym przykładzie każde wywołanie delegatu dostanie nowy obiekt listy, do którego zostanie dodany parametr wejściowy `int`
+
+```csharp
+Func<int, List<int>> listAddFunc = x =>
+{
+    var tempList = new List<int>();
+    tempList.Add(x);
+
+    return tempList;
+};
+
+var list1 = listAddFunc(1); // Lista z pojedynczym elementem "1"
+var list2 = listAddFunc(2); // Lista z pojedynczym elementem "2"
+var list3 = listAddFunc(3); // Lista z pojedynczym elementem "3"
+```
+
+## 6. Podsumowanie i dobre praktyki
+
+W tym rozdziale nauczyliśmy się jak korzystać z delegatów i wyrażeń lambda oraz w jaki sposób mogą nam one pomóc w pisaniu elastycznego i rozszerzalnego kodu. Na koniec chciałbym Ci przekazać kilka dobrych praktyk związanych z delegatami i wyrażeniami lambda:
+
+- Unikaj nadużywania delegatów. Mimo, że delegaty są potężnym narzędziem ich używanie w nadmiarze może skomplikować kod i drastycznie utrudnić jego zrozumienie. Stosuj je tam gdzie przyniosą Ci korzyści - np. jeśli jakaś sygnatura metody jest szeroko wykorzystywana i dostarczana z zewnątrz
+
+- Nazywaj delegaty w sposób znaczący. Nazewnictwo delegatów powinno odzwierciedlać ich funkcjonalność. Dzięki temu łatwiej będzie zrozumieć co robią i w jaki sposób ich używać. Częstą praktyką jest nazywanie standardowcch delegatów `Func` i `Action` z suffixem _Func_ lub _Action_. Pozwala to od razu stwierdzić, że mamy do czynienia z delegatem.
+
+- Unikaj delegatów zbyt skomplikowanych. Delegaty powinny być stosunkowo proste i nie powinny zawierać zbyt skomplikowanej logiki. Jeśli potrzebujesz bardziej skomplikowanego zachowań rozważ użycie interfejsów lub klas abstrakcyjnych
+
+- Staraj się używać wbudowanych delegatów `Action`, `Func`, `Predicate`. Pozwolą one na łatwiejsze używanie i definiowanie delegatów oraz większość osób czytających kod będzie już z nimi zaznajomiona.
+
+- Pamiętaj o wyjątkach. Podczas wywołania delegatów może dojść do błędów, dlatego należy sprawdzać wyjątki i obsługiwać je zgodnie z wymaganiami biznesowymi.
