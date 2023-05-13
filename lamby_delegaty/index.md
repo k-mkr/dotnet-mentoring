@@ -42,7 +42,7 @@ public class Calculator
 }
 ```
 
-Patrząc na powyższe metody możemy zauważyć pewien wzorzec, a mianowicie,że każda metoda ma bardzo podobną sygnaturę - `double nazwa_metody(double x, double y)`. A co gdybyśmy mogli zamknąć obsługę kalkulatora w pojedynczej metodzie i przenieść definicję operacji na klienta? W tym mogą nam pomóc deletagy, które pozwolą zdefiniować sygnaturę metody, która ma zostać przekazana z zewnątrz do naszego kalkulatora:
+Patrząc na powyższe metody możemy zauważyć pewien wzorzec, a mianowicie,że każda metoda ma bardzo podobną sygnaturę - `double nazwa_metody(double x, double y)`. A co gdybyśmy mogli zamknąć obsługę kalkulatora w pojedynczej metodzie i przenieść definicję operacji na użytkownika wywołującego metody naszego kalkulatora? W tym mogą nam pomóc deletagy, które pozwolą zdefiniować sygnaturę metody, która ma zostać przekazana z zewnątrz do naszego kalkulatora:
 
 ```csharp
 public delegate double Operation (double x, double y);
@@ -202,7 +202,7 @@ public class AllegroOrder
 }
 ```
 
-Jak widzisz obie implementacje są od siebie całkowicie niezależne i korzystają z zaimplementowanej przez Ciebie logiki. Gdyby teraz pojawiało się wymaganie biznesowe, że chcemy zbierać statystyki co do miejsc, z których wykonywane są zamówienia, aby później móc podejmować decyzje na podstawie tych danych to jedyne co wystarczyłoby zrobić to zmodyfikować metodę `OrderSummary.CalculateEndPrice` o stosowną implementację i wszystko odbywa się przezroczyście dla klientów tej metody.
+Jak widzisz obie implementacje są od siebie całkowicie niezależne i korzystają z zaimplementowanej przez Ciebie logiki. Gdyby teraz pojawiało się wymaganie biznesowe, że chcemy zbierać statystyki co do miejsc, z których wykonywane są zamówienia, aby później móc podejmować decyzje na podstawie tych danych to jedyne co wystarczyłoby zrobić to zmodyfikować metodę `OrderSummary.CalculateEndPrice` o stosowną implementację i wszystko odbywa się przezroczyście dla użytkowników wywołujących tą metodę.
 
 Na podstawie powyższego przykładu możesz się zastanawiać - No OK, ale dlaczego nie wykorzystać do tego dziedziczenia:
 
@@ -263,7 +263,7 @@ Tego typu rozszerzenia nie byłyby trywialne przy pomocy zwykłych mechanizmów 
 Kolejną funkcjonalnością, która wyróżnia delegaty spośród innych mechanizmów przenoszenia odpowiedzialności jest ich zdolność do multiemisji (ang. multicasting). Oznacza to nic innego jak to, że egzemplarz delegatu może odnosić się do więcej niż jednej metody, ale do całej ich listy. Do operacji na delegatach używamy standardowych operatorów - +=, -=, =. Działanie tego mechanizmu ponownie pokażemy na przykładzie.
 
 Wyobraźmy sobie, że jesteśmy właścicielami oprogramowania, które służy do przetwarzania i kompresowania danych zbieranych przez satelity umieszczone w kosmosie. Nasze oprogramowanie wspiera różne instytucje jak NASA, czy SpaceX, ale jest również dostępne dla zwykłych pasjonatów.
-Każdy z klientów chciałby na swój sposób monitorować postęp przetwarzania. W tym celu można wykorzystać mechanizm multiemisji:
+Każdy z klas chciałaby na swój sposób monitorować postęp przetwarzania. W tym celu można wykorzystać mechanizm multiemisji:
 
 ```csharp
 public delegate void ProgressMonitor(int processed, int totalCount);
@@ -283,7 +283,7 @@ public class DataProcessor
 }
 ```
 
-Powyższa prosta implementacja przedstawia proces przetwarzania listy danych `SpaceData`. Implementacja tej klasy została pominięta, gdyż nie jest przedmiotem przykładu. Klasa `DataProcessor` udostępnia publiczną właściwość o typie delegaty, do której może się odwołać każdy klient i dzięki temu monitorować postęp przetwarzania. Przykładowe użycie mogłoby wyglądać następjąco:
+Powyższa prosta implementacja przedstawia proces przetwarzania listy danych `SpaceData`. Implementacja tej klasy została pominięta, gdyż nie jest przedmiotem przykładu. Klasa `DataProcessor` udostępnia publiczną właściwość o typie delegaty, do której może się odwołać każda klasa zainteresowana sprawdzaniem postępu i dzięki temu monitorować postęp przetwarzania. Przykładowe użycie mogłoby wyglądać następjąco:
 
 ```csharp
 var processor = new DataProcessor();
@@ -461,11 +461,11 @@ To czy będziesz korzystać z delegatu `Predicate<T>`, czy z `Func<T, bool>` jes
 
 ### 3.5. Podsumowanie delegat Action i Func
 
-W trakcie dalszej przygody z językiem C# zobaczysz jak częste i powszechne są delegaty `Action` i `Func` można powiedzieć, że wraz z lambdami, które będziemy za chwilę omawiać są obecne wszędzie od kolekcji po testy. Jak mogłeś już zauważyć są niezwykle użyteczne poprzez swoją elastyczność i możliwość przesunięcia odpowiedzialności za dostarczenie implementacji na klienta naszej metody.
+W trakcie dalszej przygody z językiem C# zobaczysz jak częste i powszechne są delegaty `Action` i `Func` można powiedzieć, że wraz z lambdami, które będziemy za chwilę omawiać są obecne wszędzie od kolekcji po testy. Jak mogłeś już zauważyć są niezwykle użyteczne poprzez swoją elastyczność i możliwość przesunięcia odpowiedzialności za dostarczenie implementacji na wywołującego naszą metodę.
 
 ## 4. Kiedy delegate, a kiedy interfejsy
 
-Jak może już zauważyłeś delegaty są na swój sposób podobne do interfejsów, ponieważ spełniają tą samą rolę - definiują zachowanie i przesuwają obowiązek implementacji na klienta.
+Jak może już zauważyłeś delegaty są na swój sposób podobne do interfejsów, ponieważ spełniają tą samą rolę - definiują zachowanie i przesuwają obowiązek implementacji na wywołującego.
 
 W związku z tym możemy powiedzieć, że każdy problem, dający się rozwiązać za pomocą delegatu można też rozwiązać przy wykorzystaniu interfejsu. W celu zaprezentowania tej wymienności rozpatrzmy przykład zapisywania zawartości pliku w dowolne miejsce. Przy użyciu delegatów kod wyglądałby następująco:
 
