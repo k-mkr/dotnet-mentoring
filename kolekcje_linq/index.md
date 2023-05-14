@@ -116,7 +116,95 @@ List<int> numbers4 = new List<int>(sourceArr); // Zawartość listy 3 2 1
 numbers4.Add(5); // Zawartość listy 3 2 1 5
 ```
 
-Każdy z konstruktorów ma swoje zastosowanie i domyślnego konstruktora
+Każdy z konstruktorów ma swoje zastosowanie i dla przykładu domyślnego konstruktora możemy używać przy przeglądaniu innej kolekcji i dodawaniu niektórych jej elementów do nowej listy na potrzeby dalszego użycia, a konstruktora przyjmującego inną kolekcję jeśli np. chcemy stworzyć listę na podstawie tablicy żeby mieć dostęp do funkcjonalności listy.
+
+Jako, że lista jest chyba najczęściej używaną kolekcją w języku C# (głównie wynika to z tego, że programista zawsze woli zostawić sobie furtkę w przypadku potencjalnej zmiany wymagań kiedy kolekcja musiałaby być nagle modyfikowana) i w związku z tym myślę, że warto żebyśmy sobie przejrzeli jej najpopularniejsze metody i omówili ich zasadę działania oraz, abyś miał świadomość niektórych konsekwencji ich używania.
+
+### 2.2.3. Metody typu "Add"
+
+Zasadę działania tych metod omówiliśmy sobie wyżej przy opisywaniu listy i zasady jej działania. Przy dodawaniu elementów wyróżniamy dwie główne metody:
+
+- `void Add(T item)` - metoda odpowiada za dodawanie elementu na końcu listy
+- `void AddRange(IEnumerable<T> collection)` - metoda pozwala na dodanie zbioru elementów na końcu listy
+
+Klasa `IEnumerable<T>` może być dla Ciebie póki co nie zrozumiała, ale na razie się nią nie przejmujmy. W dalszej części modułu ją sobie omówimy. Na chwilę obecną najważniejsze żebyś zapamiętał, że każda klasa, która jest przeliczalna (możemy po niej iterować przy użyciu `foreach`) implementuje interfejs `IEnumerable<T>`. W związku z tym do metody `AddRange` można przekazać każdą kolekcję, która zadziała z `foreach`.
+
+Zobaczmy zastosowanie tych metod na przykładach:
+
+```csharp
+List<string> words = new List<string>();
+
+words.Add("one"); // one
+
+string[] wordsArr = new string[] { "two", "three" }; // one two three
+words.AddRange(wordsArr);
+
+words.AddRange(new string[] { "four", "five" }); // one two three four five
+```
+
+Dodawanie elementów na końcu listy jest operacją szybką i efektywna, ponieważ zazwyczaj na końcu jest wolne miejsce w tablicy wewnętrznej, ewentualnie zostanie ona rozszerzona
+
+### 2.2.4. Metody typu "Insert"
+
+Lista posiada również możliwość wstawiania elementów w dowolnym miejscu. Do tego służą metody:
+
+- `void Insert(int index, T item)` - wstawia element `item` w miejsce o numerze `index`
+- `void InsertRange(int index, IEnumerable<T> collection)` - wstawia kolekcję w miejsce o numerze `index`
+
+Najważniejsze żebyś zapamiętał, że operacja nie podmienia zawartości, a jedynie wstawia elementy pod podany indeks, a resztę elementów przesuwa w przód. Zobaczmy to na poniższych przykładach:
+
+```csharp
+List<string> words = new List<string> { "one", "two", "three" };
+
+words.Insert(1, "next"); // one next two three
+
+words.InsertRange(2, new string[] { "four", "five" }); // one next four five two three
+
+words.Insert(10, "out"); // wyjątek ArgumentOutOfRangeException - indeks musi być w obrębie listy
+```
+
+Korzystanie z metody `Insert` wydaje się być bardzo wygodne i pozwala na większą elastyczność w operowaniu na kolekcji, ale musimy zawsze pamiętać o konsekwencjach użycia, którymi jest mniejsza wydajność tej operacji w stosunku do metody `Add`. Wewnętrzna implementacja metody `Insert` powoduje tak naprawdę przesuniecie (skopiowanie) wszystkich elementów od `index..end`, i wstawienie w miejsce pustego indeksu, który się zwolnił po przesuniecie nowego elementu `T item`. Z perspektywy działania programu i mocy komputerów ten czas może być pomijalny, ale wyobraźmy sobie, że chcemy wstawić element w indeks 1 do listy posiadającej 100000 elementów. Wtedy 99999 będzie musiało być przesunięte, czyli przepisane w nowe miejsce.
+
+Oczwiście w żadnym wypadku nie chcę demoniozować tych metod, bo jeśli jako programiści w naszym projekcie mamy tylko takie problemy optymalizacyjne to znaczy, że jest dobrze ;).
+
+### 2.2.5. Metody typu "Remove"
+
+Metody usuwające elementy z listy działają na podobnej zasadzie jak metody typu "Insert". Przyjrzyjmy się niektórym z nich:
+
+- `bool Remove(T item)` - metoda usuwa element z listy. Porównanie odbywa się na podstawie metody `T.Equals` i usuwany jest tylko pierwszy napotkany element. Metoda zwraca `true` jeśli operacja usuwania się powiodła
+- `void RemoveAt(int index)` - usuwa element spod konkretnego indeksu
+- `void RemoveRange(int index, int count)` - usuwa liczbę elementów `count` poczynając od indeksu `index`. Metoda rzuci wyjątek `ArgumentOutOfRangeException` jeśli `count` przekroczy liczbę elementów poczynając od numeru indeksu
+- `int RemoveAll(Predicate<T> match)` - usuwa wszystkie elementy spełniające warunek będący wyrażeniem lambda `Predicate<T>`. Jako rezultat zwraca liczbę usuniętych elementów.
+
+Zobaczmy sobie działanie tych metod na przykładach:
+
+```csharp
+List<string> words = new List<string> { "one", "two", "three", "four", "five", "six", "seven" };
+
+words.Remove("two"); // True - one three four five six seven
+
+words.Remove("THREE"); // False - string.Equals zwraca uwagę na wielkość liter - Zawartość listy się nie zmieni
+
+words.RemoveAt(1); // one four five six seven
+
+words.RemoveRange(1, 2); // one six seven
+
+words.RemoveAll(x => x.StartsWith('s')); // Zwróci 2, a zawartość listy to: one
+```
+
+Z praktycznego punktu widzenia wszystkie metody tak jak w przypadku `Insert` powoduja przesunięcie tablicy. Ale tak jak mówiłem w większości przypadków narzut jest pomijalny, warto jedynie o tym pamiętać. Metodą, na którą najbardziej trzeba zwrócić uwagę jest `Remove(T item)`, która jest zależna od impelemntacji metody `T.Equals` i czasem może prowadzić do niespodziewanych rezultatów kiedy myślimy, że obiekt się usunie z listy, a tak się jednak nie stanie.
+
+### 2.2.6. Inne metody
+
+Listy mają wiele różnych innych metod, których nie będziemy omawiać w tym module, a które najlepiej poznać w boju podczas realizowania projektów i spełniania wymagań biznesowych. Z kilku cech charakterystycznych o których warto wspomnieć w kontekście list:
+
+- `T this[] { get; set; }` - Do elementów listy możemy się odwoływać podając indeks elementu, który chcielibyśmy odczytać
+- `List<T> GetRange(int index, int count)` - Wyciąga "podzbiór listy" jako odrębną listę
+- `T[] ToArray()` - konwertuje listę na tablicę
+
+```csharp
+// PRZYKŁADY
+```
 
 TODO:
 Dodawania, a wstawianie elementów
