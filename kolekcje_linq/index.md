@@ -203,8 +203,217 @@ Listy mają wiele różnych innych metod, których nie będziemy omawiać w tym 
 - `T[] ToArray()` - konwertuje listę na tablicę
 
 ```csharp
-// PRZYKŁADY
+List<string> words = new List<string> { "one", "two", "three", "four", "five" };
+
+words[2] = "three_new";
+
+List<string> listSubset = words.GetRange(2, 3); // three_new four five
+
+List<string> invalidList = words.GetRange(3, 3); // System.ArgumentException - elementy są po za zakresem listy
 ```
 
-TODO:
-Dodawania, a wstawianie elementów
+Podsumowując listy są najbardziej uniwersalną kolekcją wbudowaną w język C#. Spełniają większość wymagań jakie może stawiać przed nimi programista. W dalszej części dotyczącej LINQ zobaczysz w jaki sposób można się nimi bawić i jak przeróżne operacje można na nich wykonywać.
+
+Pamiętaj jednak, że mimo iż listy w C# są powszechnie używane nie są wolne od wad, których mysimy mieć świadomość:
+
+- Wysoka złożoność czasowa dla niektórych operacji jak omówione wyżej wstawianie/usuwanie ze środka listy. Jeśli usunięcie elementu spowoduje konieczność przesunięcia to operacja może być kosztowna czasowo
+- Przeszukiwanie listy jest operacją o złożoności O(n) - czas wykonania rośnie liniowo np. dla 100 elementów potrzebujemy maksymalnie 100 jednostek czasu na znalezienie szukanego, a przy 200 jest to 200 elementów (oczywiście w najbardziej pesymistycznym przypadku)
+
+## 2.3 Słownik - `Dictionary<TKey, TValue>`
+
+Słownik jest kolekcją, w której każdy przechowywany element stanowi parę klucz-wartość. Tego typu struktur danych najczęściej używa się do przeszukiwania i sortowania. Cechą charakterystyczną, która może być jednocześnie wadą i zaletą w przypadku słowników jest unikalność ich kluczy.
+
+Dzięki mechanizmowi indeksowania na podstawie klucza słowniki oferują bardzo szybki dostęp do wartość na podstawie klucze. Czas dostępu do elementu w słowniku jest zazwyczaj stały - złożoność obliczeniowa wynosi O(1) niezależnie od rozmiaru słownika.
+
+Jak zauważyłeś słownik `Dictionary<TKey, TValue>` jest typem generycznym, w którym masz pełną dowolność co do używanych typów. Ważne jedynie, abyś pamiętał, że klucze przekazywane pod `TKey` muszą być unikalne. W dalszej części dowiesz się w jaki sposób odbywa się sprawdzanie unikalności klucza.
+
+Na początku zapoznamy się ze sposobami deklaracji słownika oraz najcześciej używanymi metodami, które pozwalają na pracę z nim. Może żeby już nie pracować z typami prostymi zdefinujmy sobie prostą klasę pracownik - `Employee`:
+
+```csharp
+class Employee
+{
+    public string FirstName { get; set; }
+
+    public string LastName { get; set; }
+}
+```
+
+### 2.3.1 Definicja
+
+Słowniki możemy tworzyć na różne sposoby. Wszystkoe zależy czy mamy już jakieś dane początkowe czy dopiero będziemy chcieli je dodawać. Zacznijmy na początek od pusteg słownika pracowników, do którego następnie dodamy nowozatrudnionego pracownika. Kluczem dla naszego słownika będzie `string` będący jednocześnie identyfikatorem pracownika:
+
+```csharp
+Dictionary<string, Employee> employees = new Dictionary<string, Employee>();
+
+employees.Add("Emp01", new Employee { FirstName = "Jan", LastName = "Kowalski" });
+```
+
+W przypadku gdy mamy dane początkowe, słownik może zostać nimi zasilony podczas inicjalizacji. Odbywa się to w podobny sposób jak przedstawiony wcześniej przy omawianiu listy:
+
+```csharp
+Dictionary<string, Employee> executives = new Dictionary<string, Employee>
+{
+    { "Emp001", new Employee { FirstName = "Adam", LastName = "Nowak" } },
+    { "Emp002", new Employee { FirstName = "Anna", LastName = "Marzec" } }
+};
+```
+
+Słowniki posiadają jeszcze kilka innych metod tworzących jako konstruktory, ale nie będziemy ich tutaj omawiać. Możesz je przeanalizować na własną rękę i zobaczyć czy znajdujesz dla nich zastosowanie.
+
+### 2.3.2 Odczyt
+
+Jak już wcześniej wspomnieliśmy odczyt ze słowniku odbywa się w czasie stałym niezależnie od liczby jego elementów. Jest jeden z głównych powodów, dla których z nich korzystamy. Łatwo można sobie wyobrazić przypadki zastosowania. Rozpatrzmy sobie problem uprawnień dla grup użytkowników. Zdefiniujmy sobie więc pojęcie uprawnienia:
+
+```csharp
+enum AccessType
+{
+    View = 1,
+    Create = 2,
+    Update = 4,
+    Delete = 8,
+    Full = View | Create | Update | Delete;
+}
+
+class Permission
+{
+    public string Object { get; set; }
+
+    public AccessType Access { get; set; }
+}
+```
+
+Następnie zdefiniujmy sobie słownik uprawnień w zależności od grupy użytkowników. Dla uproszczenia przekazałem do słownika tylko jedno uprawnienie, ale możemy sobie wyobrazić, że mogłoby być ich dziesiątki dla każdego z typów użytkowników:
+
+```csharp
+Dictionary<string, Permission> permissions = new Dictionary<string, Permission>
+{
+    { "Reader", new Permission { Object = "Product", Access = AccessType.View } },
+    { "StoreManager", new Permission { Object = "Product", Access = AccessType.View | AccessType.Create } },
+    { "Administrator", new Permission { Object = "Product", Access = AccessType.Full } }
+};
+```
+
+Wartości ze słownika możemy odczytywać na kilka sposobów i każda z nich ma swoje cechy charakteryztyczne, które pozwalają na obsługę np. braku klucza:
+
+```csharp
+Permission adminPermission = permissions["Administrator"]; // Najprostszy odczyt
+
+Permission notFound = permissions["Contributor"]; // Wyjątek System.Collections.Generic.KeyNotFoundException
+
+bool keyFound = permissions.TryGetValue("StoreManager", out Permission managerPermission); // True - wartość zostanie przypisana do managerPermission
+
+bool hasReader = permissions.ContainsKey("Reader"); // True - sprawdzi jedynie czy klucz istnieje
+```
+
+Jeśli dalej nie czujesz zastosowania słowników to wyobraź sobie sytuacje, że dla każdej operacji, którą wykonuje użytkownik musisz sprawdzić czy posiada do niej uprawnienia. Musiałbyś przeszukiwać kolekcje tysiące razy i wraz z rozrastaniem się systemu i dodawaniem kolejnych obiektów i uprawnień ich sprawdzanie zajmowałoby coraz więcej czasu.
+
+Każda z tych operacji odczytu ma jakieś swoje zastosowanie. Sam musisz zawsze oceniać czy klucz w słowniku istnieje, a jeśli nie to w jaki sposób program powinien się zachować (zgłosić błąd, rzucić wyjątek). Najezpieczniejszą spośród metod jest `TryGetValue`, ponieważ jest połączeniem `ContainsKey` i metody dostępowej indeksu `this[]`.
+
+### 2.3.3. Dodawanie
+
+Aby dodać element do słownika należy wywołać metodę `Add` lub użyć metody dostępowej indeksu. Obie z tych metod różnią się zachowanie. Wywołanie metody `Add` z tym samym kluczem powoduje wyjątek. W przypadku metody dostępowej indeksu dodajemy nowy element do słownika jeśli element o takim kluczu nie istnieje. W przypadku istnieniu już klucza dokonywana jest modyfikacja wartości. Dla naszych przykładów użyjemy zdefiniowanego wyżej słownika uprawnień:
+
+```csharp
+Permission orderModifyAccess = new Permission { Object = "Order", Access = AccessType.Create | AccessType.Update };
+
+permissions.Add("Contributor", orderModifyAccess); // Dodanie kolejnego klucza do słownika
+
+permissions.Add("Contributor", new Permission()); // System.ArgumentException - zduplikowany klucz
+
+permissions["StoreManager"] = orderModifyAccess; // Element o kluczu StoreManager będzie odnosić się teraz do orderModifyAccess
+
+permissions["Guest"] = new Permission(); // Do słownika zostanie dodany nowy element pod kluczem Guest
+```
+
+Tak jak w przypadku odczytu sposób dodawania zależy od wymagań biznesowych. Możemy natomiast wyróżnić sobie pewne wzorce, które pomogą Ci podjąć decyzję:
+
+- Dodawanie tylko raz -> `ContainsKey` + `Add`
+- Dodawanie/Nadpisanie -> `this [] { set; }`
+- Tylko nadpisanie -> `ContainsKey` + `this [] { set; }`
+
+### 2.3.4 Inne metody
+
+Spośród innych metod, które mogą Ci się przydać podczas używania słowników są:
+
+- `ICollection<TKey> Keys { get; }` - zwraca listę kluczy w postaci kolekcji
+- `ICollection<TValues> Values { get; }` - zwraca listę wartości
+
+Metody te czasem się przydają. Wyobraź sobie, że chciałbyś wyciągnąć wszystkie grupy, dla których zdefiniowane zostały uprawnienia. Zamiast iterować się po całym słowniku wystarczy, że wywołasz metodę:
+
+```csharp
+ICollection<string> keys =  permissions.Keys; // zwróci listę wszystkich kluczy
+```
+
+### **2.3.5.** Skąd słownik wie o duplikacie?
+
+W rozdziale tym omówimy sobie skąd słownik wie, że podany klucz już istnieje w słowniku. Na samym wstępie chcę Ci zaznaczyć, że jest to wiedza z zakresu rozszerzonego i jeśli czegoś nie będziesz rozumieć to nie masz powodu do niepokoju. Chciałbym jedynie, abyś miał ogólne pojęcie jak słowniki działają pod spodem, szczególnie gdybyś kiedyś ich używał przekazując np. jako klucz obiekt klasy.
+
+W poprzednim rozdziale dotyczącym typu `object` poznałeś metody, które dziedziczy każda tworzona klasa. Jednymi z nich są `Equals` oraz `GetHashCode` i właśnie na podstawie rezultatów z tych dwóch metod słownik podejmuje decyzję czy dany klucz został już zdefiniowany.
+
+Zazwyczaj każda z klas posiada domyślną impelmentację operacji sprawdzania równości, która opiera się na **porównaniu referencji**.
+
+Jak natomiast możesz się domyślić programiście nie zawsze zależy na domyślnym znaczeniu tych operacji. Możemy sobie np. wyobrazić sytuację, że chciałbyś dodawać do słownika wartości po kluczu, który jest typu `string`, ale chcesz, żeby wielkość liter nie miała znaczenia. Domyślnie to nie zadziała, ponieważ metoda `string.Equals` zwraca uwagę na wielkość liter.
+
+Rozważmy sobie prosty przypadek, gdzie zdefiniujemy sobie słownik przyjmujący jako klucz klasę `Person` wraz z wartością ratingu, który posiada. Załóżmy też, że jeśli osoba posiada to samo imię i nazwisko to z perspektywy naszej aplikacji jest to dokładnie ta sama osoba:
+
+```csharp
+public class Person
+{
+    public string FirstName { get; set; }
+
+    public string LastName { get; set; }
+}
+```
+
+Przykładowy słownik mógłby wyglądać następująco:
+
+```csharp
+Dictionary<Person, int> persons = new Dictionary<Person, int>();
+
+persons.Add(new Person { FirstName = "Jan", LastName = "Kowalski" }, 95); // OK
+persons.Add(new Person { FirstName = "Jan", LastName = "Kowalski" }, 100); // OK
+```
+
+W powyższym listingu oba wpisy zostały dodane do słownika. Tak jak powiedzieliśmy sobie na samym początku rozdziału domyślna implementacja operacji sprawdzania równości porównuje referencje, które w naszym przypadku są różne - posiadamy dwa różne obiekty zapisane w dwóch różnych miejscach w pamięci.
+
+Aby nasz program spełniał wymagania biznesowe musielibyśmy jawnie zaimplementować w klasie `Person` metody `Equals` oraz `GetHashCode`:
+
+```csharp
+public class Person
+{
+    public string FirstName { get; set; }
+
+    public string LastName { get; set; }
+
+    public override bool Equals(object? obj)
+    {
+        Person o = obj as Person;
+        if (o != null)
+        {
+            return o.FirstName == FirstName && o.LastName == LastName;
+        }
+
+        return false;
+    }
+
+    public override int GetHashCode()
+    {
+        return $"{FirstName}_{LastName}".GetHashCode();
+    }
+}
+```
+
+Dla powyższej implementacji klasy `Person` dodanie dwóch wartości do słownika tak jak w poprzednim przykładzie zakończyłoby się wyjątkiem:
+
+```csharp
+Dictionary<Person, int> persons = new Dictionary<Person, int>();
+
+persons.Add(new Person { FirstName = "Jan", LastName = "Kowalski" }, 95); // OK
+persons.Add(new Person { FirstName = "Jan", LastName = "Kowalski" }, 100); // System.ArgumentException
+```
+
+Zastanawiasz się dlaczego tak się stało? Ponieważ dla tych samych przekazanych danych metody `Equals` i `GetHashCode` zwracają te same wartości, a więc słownik interpretuje to jako próba dodania tego samego klucza, mimo że referencje do obiektów są różne.
+
+```
+TBD: IEqualityComparer
+```
