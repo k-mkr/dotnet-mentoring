@@ -414,6 +414,189 @@ persons.Add(new Person { FirstName = "Jan", LastName = "Kowalski" }, 100); // Sy
 
 Zastanawiasz się dlaczego tak się stało? Ponieważ dla tych samych przekazanych danych metody `Equals` i `GetHashCode` zwracają te same wartości, a więc słownik interpretuje to jako próba dodania tego samego klucza, mimo że referencje do obiektów są różne.
 
+Na platformie .NET stworzono dodatkowy protokół "dołączany", dzięki któremu można korzystać ze słowników z typem kluczy, dla którego chcemy zmienić domyślną implementację porównania. W tym celu stworzono interfejs `IEqualityComparer<T>`, który jest odpowiedzialny za sprawdzanie równości i w swojej definicji posiada dwie wyżej omówione metody:
+
+```csharp
+public interface IEqualityComparer<in T>
+{
+    bool Equals(T? x, T? y);
+
+    int GetHashCode([DisallowNull] T obj);
+}
 ```
-TBD: IEqualityComparer
+
+Implementując ten interfejs programista otwiera sobie ścieżkę do pisania wielu różnych implementacji komparatora dla tej samej klasy. Następnie możemy stworzyć słownik przekazując mu w konstruktorze komparator (implementację interfejsu `IEqualityComparer<T>`), który będzie obowiązywał przez cały jego cykl życia. Definicja konstruktora dla słownika `Dictionary<int, string>` to:
+
+![Dictionary IEqualityComparer Consturctor](./imgs/dictionary_iequalitycomparer.png)
+
+Zobaczmy działanie własnych komparatorów w praktyce. Weźmy znów na warsztat naszą klasę `Person` i wyobraźmy sobie, że chcielibyśmy mieć dwa słowniki osób, przy czym jeden przechowywałby tak jak w poprzednim przykładzie osoby i ich rating, a drugi "rodziny" wraz z liczbą członków. W związku z tym próba dodania kolejnego członka o tym samym nazwisku powinna zakończyć się błędem, ale jednocześnie powinniśmy móc w prosty sposób sprawdzić rodzina o takim nazwisku została już dodana. Przykładową implementacją przedstawiono poniżej:
+
+```csharp
+public class Person
+{
+    public string FirstName { get; set; }
+
+    public string LastName { get; set; }
+}
+
+public class FullNameEqualityComparer : IEqualityComparer<Person>
+{
+    public bool Equals(Person? x, Person? y)
+    {
+        if (x == null || y == null)
+            return false;
+
+        return x.FirstName == y.FirstName && x.LastName == y.LastName;
+    }
+
+    public int GetHashCode(Person obj)
+    {
+        return $"{obj.FirstName}_{obj.LastName}".GetHashCode();
+    }
+}
+
+public class FamilyEqualityComparer : IEqualityComparer<Person>
+{
+    public bool Equals(Person? x, Person? y)
+    {
+        if (x == null || y == null)
+            return false;
+
+        return x.LastName == y.LastName;
+    }
+
+    public int GetHashCode(Person obj)
+    {
+        return obj.LastName.GetHashCode();
+    }
+}
 ```
+
+Jak widzisz zaimplementowaliśmy dwie różne implementacje interfejsu `IEqualityComparer<Person>`, z których jedna jest odpowiedzialna za porównywanie osób, natomiast druga sprawdza jedynie nazwiska dzięki czemu możemy identyfikować dwie osoby o tym samym nazwisku jako członków tej samej rodziny:
+
+```csharp
+Person member1 = new Person { FirstName = "Jan", LastName = "Nowak" };
+Person member2 = new Person { FirstName = "Anna", LastName = "Nowak" };
+Person member3 = new Person { FirstName = "Jan", LastName = "Nowak" };
+
+Dictionary<Person, int> ratings = new Dictionary<Person, int>(new FullNameEqualityComparer());
+ratings.Add(member1, 95);
+ratings.Add(member2, 100);
+ratings.Add(member3, 80); // Wyjątek - osoba o takich danych już istnieje
+
+Dictionary<Person, int> families = new Dictionary<Person, int>(new FamilyEqualityComparer());
+families.Add(member1, 1);
+families.Add(member2, 1); // Wyjątek - nazwisko już istnieje
+
+families[member2] += 1; // wartość dla klucza "Nowak" będzie wynosić 2
+```
+
+Mam nadzieję, że koncept z komparatorami i ich różnymi implementacjami jest dla Ciebie zrozumiały. Główną zaletą tego rozwiązania jest możliwość dostarczania różnych sposobów porównań dla słowników posiadających ten sam typ jako klucz.
+
+## 2.4 Inne kolekcje
+
+Platforma .NET zawiera bardzo dużo różnych wbudowanych kolekcji, które pozwalają na pokrycie przeróżnych scenariuszy bez potrzeby pisania własnej implementacji. W tym rozdziale przyjrzymy się najpopularniejszym z nich.
+
+### 2.4.1 Kolejki - `Queue<T>`
+
+Jak pewnie domyślasz się po nazwie klasa `Queue<T>` dostarcza nam implementację kolejki w stylu FIFO (first-in, first-out) co w wolnym tłumaczeniu znaczy, że pierwszy element, który dodamy do kolejki zostanie również jako pierwszy wyciągnięty w momencie czytania. Jak sama nazwa wskasuje struktura ta najczęście wykorzystywana jest do zapewnienia wymagań związanych z kolejkowaniem. Najczęściej używane metody, które udostępnia klasa `Queue<T>` zostały przedstawione poniżej:
+
+- `Enqueue(T item)` - dodaje obiekt `T` do kolejki
+- `T Dequeue()` - wyciąga z kolejki pierwszy dodany obiekt
+- `T Peek()` - pozwala podejrzeć następny obiekt w kolejce do wyciągnięcia bez ściągania go z kolejki
+- `bool TryDequeue(out T item)` - próbuje ściągnąć obiekt z kolejki, jeśli się uda zwraca `true` i wpisuje obiekt do zmiennej `item`, a przeciwnym wypadku zwraca `false`
+- `bool TryPeek(out T item)` - zachowuje się analogicznie jak `TryDequeue` przy czym nie ściąga elementu z kolejki
+
+Uwaga: Metoda `TryDequeue` jest w większości przypadku zalecana przy ściąganiu elementów z kolejki, ponieważ metoda `Dequeue` w przypadku pustej kolejki powoduje wyjątek (ten sam przypadek ma zastosowanie dla `TryPeek` i `Peek`)
+
+Teraz przeanalizujmy sobie użycie tych metod na przykładzie. Wyobraź sobie, że jesteś odpowiedzialny za implementację systemu informatycznego w urzędzie skarbowym, który wyświetlałby na ekranie aktualnie obsługiwany identyfikator zgłoszenia. Kolejność obsługi zgłoszeń na dany dzień byłaby ustalana na podstawie potwierdzenia ich przez petenta przy wejściu do budynku.
+
+```csharp
+class TaxOffice
+{
+    public Queue<string> TicketsQueue { get; set; }
+
+    public void Confirm(string ticketId)
+    {
+        TicketsQueue.Enqueue(ticketId);
+    }
+
+    public void ShowCurrent()
+    {
+        string currentTicket = TicketsQueue.Dequeue();
+
+        Console.WriteLine(currentTicket);
+    }
+}
+```
+
+Zdefiniowaliśmy klasę `TaxOffice`, która odpowiada jednemu z urzędów skarbowych. Klasa posiada dwie metody, jedna do potwierdzania przybycia natomiast druga wyświetla aktualnie obsługiwany numer. Użycie klasy mogłoby wyglądać następująco:
+
+```csharp
+TaxOffice office = new TaxOffice();
+
+office.Confirm("t1"); // Kolejka - t1
+office.Confirm("t2"); // Kolejka - t1, t2
+
+office.ShowCurrent(); // Wyświetli - t1; Kolejka - t2
+
+office.Confirm("t3"); // Kolejka - t2, t3
+
+office.ShowCurrent(); // Wyświetli - t2; t1 - t3
+office.ShowCurrent(); // Wyświetli - t3; t1 - PUSTA
+office.ShowCurrent(); // Wyjątek InvalidOperationException
+```
+
+Myślę, na podstawie powyższego przykładu widzisz w jaki sposób kolejne elementy są ściągane z kolejki i przetwarzane. Niestety nasz program nie jest wolny od błędów, ponieważ jak możesz zauważyć jego działanie zawsze zakończy się błędęm na koniec dnia kiedy już nie będzie więcej zgłoszeń - program zgłosi wyjątek, że próbujemy wyciągnąć element z pustej kolejki.
+
+Zastanówmy się jak moglibyśmy zmienić implementację, aby pozbyć się błędu. Zamiast metody `Dequeue` moglibyśmy użyć przedstawionej wcześniej metody `TryDequeue` i wyświetlać numer zgłoszenia jeśli udało się je znaleźć, w przeciwnym wypadku wyświetlać "BRAK". Implementacja metody `ShowCurrent` zmieniłaby się następująco:
+
+```csharp
+public void ShowCurrent()
+{
+    bool isDequeued = TicketsQueue.TryDequeue(out string ticketId);
+    if (isDequeued)
+        Console.WriteLine(ticketId);
+    else
+        Console.WriteLien("BRAK");
+}
+```
+
+Powyższy kod przedstawiający użycie przestanie zgłaszać wyjątek. Możnaby powiedzieć, że nasz system spełnia wszystkie wymagania postawione przez biznes. Urzędnicy jednak zauważyli, że tracą bardzo dużo czasu w ciągu dnia ze względu na opieszałość ludzi, którzy przez rozkojarzenie nie wiedzą, że ich numer akurat pojawił się na ekranie. W związku z tym biznes zgłosił wymaganie, że chciałby obok aktualnie obsługiwanego numeru, wyświetlać następny numer w kolejce jeśli takowy istnieje.
+
+Implementacja wymagania mogłaby wyglądać następująco:
+
+```csharp
+...
+public void ShowCurrent()
+{
+    bool isDequeued = TicketsQueue.TryDequeue(out string ticketId);
+    if (isDequeued)
+        Console.WriteLine(ticketId);
+    else
+        Console.WriteLien("BRAK");
+
+    bool isNext = TicketsQueue.TryPeek(out string nextTicketId);
+    if (isNext)
+        Console.WriteLine("Następny: " + nextTicketId);
+}
+...
+```
+
+Od razu użyłem metody `TryPeek` żeby uniknąć zgłoszenia wyjątku w momencie kiedy nie będzie kolejnego numeru. Zobaczmy jak przedstawiałoby się użycie naszego systemu:
+
+```csharp
+TaxOffice office = new TaxOffice();
+
+office.Confirm("t1"); // Kolejka - t1
+office.Confirm("t2"); // Kolejka - t1, t2
+
+office.ShowCurrent(); // Wyświetli - t1; Następny - t2; Kolejka - t2
+...
+```
+
+Kolejki najczęściej używane są jak sama ich nazwa wskazuje przy kolejkowaniu operacji, które chcielibyśmy aby były przetwarzane w kolejności dodawania. Są one niezbędnym narzędzie w przypadku gdy chcemy coś przetwarzać w tle lub gdy czas wykonania jakiejś operacji jest wolniejszy niż czas pomiędzy kolejnymi zgłoszeniami, przychodzące zgłoszenia muszą być wtedy odkładane na później.
+
+### 2.4.2 Stack - `Stack<T>`
+
+### 2.4.3 HashSet - `HashSet<T>`
